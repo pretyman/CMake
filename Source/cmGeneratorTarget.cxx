@@ -2442,12 +2442,12 @@ std::vector<std::string> cmGeneratorTarget::GetIncludeDirectories(
   return includes;
 }
 
-static void processCompileOptionsInternal(
-  cmGeneratorTarget const* tgt,
-  const std::vector<cmGeneratorTarget::TargetPropertyEntry*>& entries,
-  std::vector<std::string>& options, UNORDERED_SET<std::string>& uniqueOptions,
-  cmGeneratorExpressionDAGChecker* dagChecker, const std::string& config,
-  bool debugOptions, const char* logName, std::string const& language)
+static void processCompileUniqueOptionsInternal(
+        cmGeneratorTarget const *tgt,
+        const std::vector<cmGeneratorTarget::TargetPropertyEntry *> &entries,
+        std::vector<std::string> &options, UNORDERED_SET<std::string> &uniqueOptions,
+        cmGeneratorExpressionDAGChecker *dagChecker, const std::string &config,
+        bool debugOptions, const char *logName, std::string const &language)
 {
   for (std::vector<cmGeneratorTarget::TargetPropertyEntry *>::const_iterator
          it = entries.begin(),
@@ -2479,6 +2479,42 @@ static void processCompileOptionsInternal(
   }
 }
 
+static void processCompileOptionsInternal(
+        cmGeneratorTarget const *tgt,
+        const std::vector<cmGeneratorTarget::TargetPropertyEntry *> &entries,
+        std::vector<std::string> &options, UNORDERED_SET<std::string> &uniqueOptions,
+        cmGeneratorExpressionDAGChecker *dagChecker, const std::string &config,
+        bool debugOptions, const char *logName, std::string const &language)
+{
+  for (std::vector<cmGeneratorTarget::TargetPropertyEntry *>::const_iterator
+         it = entries.begin(),
+         end = entries.end();
+       it != end; ++it) {
+    std::vector<std::string> entryOptions;
+    cmSystemTools::ExpandListArgument(
+      (*it)->ge->Evaluate(tgt->GetLocalGenerator(), config, false, tgt,
+                          dagChecker, language),
+      entryOptions);
+    std::string usedOptions;
+    for (std::vector<std::string>::iterator li = entryOptions.begin();
+         li != entryOptions.end(); ++li) {
+      std::string const& opt = *li;
+
+      uniqueOptions.insert(opt);
+      options.push_back(opt);
+      if (debugOptions) {
+        usedOptions += " * " + opt + "\n";
+      }
+    }
+    if (!usedOptions.empty()) {
+      tgt->GetLocalGenerator()->GetCMakeInstance()->IssueMessage(
+        cmake::LOG, std::string("Used compile ") + logName +
+          std::string(" for target ") + tgt->GetName() + ":\n" + usedOptions,
+        (*it)->ge->GetBacktrace());
+    }
+  }
+}
+
 static void processCompileOptions(
   cmGeneratorTarget const* tgt,
   const std::vector<cmGeneratorTarget::TargetPropertyEntry*>& entries,
@@ -2487,8 +2523,8 @@ static void processCompileOptions(
   bool debugOptions, std::string const& language)
 {
   processCompileOptionsInternal(tgt, entries, options, uniqueOptions,
-                                dagChecker, config, debugOptions, "options",
-                                language);
+                                      dagChecker, config, debugOptions, "options",
+                                      language);
 }
 
 void cmGeneratorTarget::GetCompileOptions(std::vector<std::string>& result,
@@ -2539,9 +2575,9 @@ static void processCompileFeatures(
   cmGeneratorExpressionDAGChecker* dagChecker, const std::string& config,
   bool debugOptions)
 {
-  processCompileOptionsInternal(tgt, entries, options, uniqueOptions,
-                                dagChecker, config, debugOptions, "features",
-                                std::string());
+  processCompileUniqueOptionsInternal(tgt, entries, options, uniqueOptions,
+                                      dagChecker, config, debugOptions, "features",
+                                      std::string());
 }
 
 void cmGeneratorTarget::GetCompileFeatures(std::vector<std::string>& result,
@@ -2588,9 +2624,9 @@ static void processCompileDefinitions(
   cmGeneratorExpressionDAGChecker* dagChecker, const std::string& config,
   bool debugOptions, std::string const& language)
 {
-  processCompileOptionsInternal(tgt, entries, options, uniqueOptions,
-                                dagChecker, config, debugOptions,
-                                "definitions", language);
+  processCompileUniqueOptionsInternal(tgt, entries, options, uniqueOptions,
+                                      dagChecker, config, debugOptions,
+                                      "definitions", language);
 }
 
 void cmGeneratorTarget::GetCompileDefinitions(
